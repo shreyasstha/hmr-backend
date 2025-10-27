@@ -5,12 +5,14 @@ import {
   updateUser,
   deleteUser,
   getProfile,
+  getAllStaff,
 } from "../controllers/user.controllers.js";
 import { authorize, verifyUser } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
 router.route("/getAllUsers").get(verifyUser, authorize("admin"), getAllUsers);
+router.route("/getAllStaff").get(verifyUser, authorize("admin"), getAllStaff);
 
 router.route("/getUserById/:id").get(verifyUser, getUserById);
 
