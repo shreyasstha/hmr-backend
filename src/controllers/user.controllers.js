@@ -19,20 +19,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
   }
 });
 
-const getAllStaff = asyncHandler(async (req, res) => {
-  try {
-    const users = await User.find({role: "staff"}).select("-password");
-    if (users.length === 0) {
-      throw new ApiError(404, "No users found");
-    }
-    res
-      .status(200)
-      .json(new ApiResponse(200, users, "Users fetched successfully"));
-  } catch (error) {
-    console.error("Error fetching users:", error.message);
-    throw new ApiError(500, error.message || "Error fetching users");
-  }
-});
+
 
 // Get a single user by ID
 const getUserById = asyncHandler(async (req, res) => {
@@ -104,4 +91,4 @@ const deleteUser = asyncHandler(async (req, res) => {
     throw new ApiError(500, error.message || "Error deleting user");
   }
 });
-export { getAllUsers, getAllStaff, getUserById, getProfile, updateUser, deleteUser };
+export { getAllUsers, getUserById, getProfile, updateUser, deleteUser };
