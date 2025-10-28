@@ -131,6 +131,7 @@ const login = asyncHandler(async (req, res, next) => {
     );
 
     // Cookie options
+    //cookie => automatically sends tokens to server
     const options = {
       httpOnly: true,
       secure: true,
@@ -161,36 +162,38 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     const decodedToken = jwt.verify(
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
-    );
+    ); //verifies refresh token
 
-    const user = await User.findById(decodedToken?._id);
+    const user = await User.findById(decodedToken._id);
     if (!user) {
       throw new ApiError(401, "Invalid refresh token");
     }
 
-    if (incomingRefreshToken !== user?.refreshToken) {
+    if (incomingRefreshToken !== user.refreshToken) {
       throw new ApiError(401, "Refresh token is expired or used");
     }
 
+    //generate new token
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateAccessAndRefreshTokens(user._id);
+
+    //save new refresh token in db
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    //set cookie option
     const options = {
       httpOnly: true,
       secure: true,
     };
 
-    const { accessToken, newRefreshToken } =
-      await generateAccessAndRefreshTokens(user._id);
-
-    return res
-      .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", newRefreshToken, options)
-      .json(
-        new ApiResponse(
-          200,
-          { accessToken, refreshToken: newRefreshToken },
-          "Access token refreshed"
-        )
-      );
+    return (
+      res
+        .status(200)
+        //.cookie("accessToken", accessToken, options) // token set in cookies
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(new ApiResponse(200, { accessToken }, "Access token refreshed"))
+    );
   } catch (error) {
     throw new ApiError(401, error?.message || "Invalid refresh token");
   }
@@ -198,38 +201,41 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 // Logout route
 const logout = asyncHandler(async (req, res) => {
-  const accessToken = req.cookies.accessToken;
+  // const accessToken = req.cookies.accessToken;
   const refreshToken = req.cookies.refreshToken;
   console.log("from logout");
-  console.log("This is access", accessToken);
+  // console.log("This is access", accessToken);
   console.log("This is refresh", refreshToken);
 
-  if (!accessToken || !refreshToken) {
+  if ( !refreshToken) {
     throw new ApiError(404, "No tokens provided. Already logged out.");
   }
 
   try {
-    const decodedToken = jwt.verify(
-      accessToken,
-      process.env.ACCESS_TOKEN_SECRET
-    );
+    // Find the user who has this refresh token stored
+    const user = await User.findOne({ refreshToken });
 
-    console.log("dt: ", decodedToken);
-    const userId = await User.findById(decodedToken.data.id).select(
-      "-password -refreshToken"
-    );
-    console.log(`User with ID ${userId} has logged out`);
+    if (!user) {
+      res.clearCookie("refreshToken");
+      throw new ApiError(404, "User not found or already logged out.");
+    }
 
+    // Remove the refresh token from DB
+    user.refreshToken = null;
+    await user.save();
+
+    // Clear the refresh token cookie
     const options = {
       httpOnly: true,
       secure: true,
+      sameSite: "strict",
     };
 
     res
       .status(200)
-      .clearCookie("accessToken", options)
+      //.clearCookie("accessToken", options)
       .clearCookie("refreshToken", options)
-      .json(new ApiResponse(200, userId, "User logged out successfully."));
+      .json(new ApiResponse(200, user, "User logged out successfully."));
   } catch (error) {
     console.error("Error verifying token:", error);
     throw new ApiError(400, "Invalid Token.");

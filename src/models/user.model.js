@@ -53,6 +53,8 @@ const userSchema = new mongoose.Schema({
 
 userSchema.methods.generateAccessToken = function () {
   try {
+    //proves user authentication
+
     const accessToken = jwt.sign(
       {
         data: {
@@ -62,7 +64,7 @@ userSchema.methods.generateAccessToken = function () {
         },
       },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: "1h" } 
+      { expiresIn: "5m" } 
     );
     return accessToken;
   } catch (error) {
@@ -72,6 +74,8 @@ userSchema.methods.generateAccessToken = function () {
 };
 userSchema.methods.generateRefreshToken = function () {
   try {
+    //use to get new access token when expires
+    //both stored in HTTP-only
     const refreshToken = jwt.sign(
       {
         data: {
@@ -81,7 +85,7 @@ userSchema.methods.generateRefreshToken = function () {
         },
       },
       process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "15m" }
     );
     return refreshToken;
   } catch (error) {
