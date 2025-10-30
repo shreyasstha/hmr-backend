@@ -49,6 +49,14 @@ const userSchema = new mongoose.Schema({
     enum: ["admin", "user", "staff", "superadmin"],
     default: "user",
   },
+    isVerified: {
+    type: Boolean,
+    default: false,
+  },
+  verificationCode: {
+    type: Number,
+    required: false,
+  }
 });
 
 userSchema.methods.generateAccessToken = function () {
@@ -57,6 +65,7 @@ userSchema.methods.generateAccessToken = function () {
 
     const accessToken = jwt.sign(
       {
+        //payload => user data
         data: {
           id: this._id,
           email: this.email,
@@ -64,7 +73,7 @@ userSchema.methods.generateAccessToken = function () {
         },
       },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: "5m" } 
+      { expiresIn: "2m" } //jwt expire
     );
     return accessToken;
   } catch (error) {
@@ -85,7 +94,7 @@ userSchema.methods.generateRefreshToken = function () {
         },
       },
       process.env.REFRESH_TOKEN_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "5m" }
     );
     return refreshToken;
   } catch (error) {
