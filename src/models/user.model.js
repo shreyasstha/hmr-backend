@@ -49,14 +49,21 @@ const userSchema = new mongoose.Schema({
     enum: ["admin", "user", "staff", "superadmin"],
     default: "user",
   },
-    isVerified: {
+  isVerified: {
     type: Boolean,
     default: false,
   },
-  verificationCode: {
-    type: Number,
+  verifyToken: {
+    type: String,
     required: false,
-  }
+  },
+  verifyTokenExpires: Date,
+  loginOTP: {
+    type: String,
+  },
+  otpExpiry: {
+    type: Date,
+  },
 });
 
 userSchema.methods.generateAccessToken = function () {

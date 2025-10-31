@@ -95,8 +95,19 @@ const register = asyncHandler(async (req, res) => {
       isVerified: false,
     });
 
+    const verifyToken = jwt.sign(
+      { id: newUser._id, email: newUser.email },
+      process.env.VERIFY_TOKEN_SECRET,
+      { expiresIn: "1d" }
+    );
+    newUser.verifyToken = verifyToken;
+    newUser.verifyTokenExpires = Date.now() + 24 * 60 * 60 * 1000; // 1 day
+
     const savedUser = await newUser.save();
-    await sendVerificationEmail(email, verificationCode);
+
+    const verificationLink = `${process.env.FRONTEND_URL}/verifyEmail?token=${verifyToken}`;
+
+    await sendVerificationEmail(email, verificationLink);
     res
       .status(201)
       .json(new ApiResponse(201, savedUser, "User registered successfully."));
@@ -169,41 +180,40 @@ const login = asyncHandler(async (req, res, next) => {
 });
 
 //email verification
-const verifyEmail = async (req, res) => {
-  const { email, verificationCode } = req.body;
-
+const verifyEmail = asyncHandler(async (req, res) => {
   try {
-    const user = await User.findOne({ email });
+    const token = req.query.token;
+    if (!token) {
+      throw new ApiError(400, "Missing verification token");
+    }
+
+    const decoded = jwt.verify(token, process.env.VERIFY_TOKEN_SECRET);
+    const user = await User.findById(decoded.id);
+
     if (!user) {
       throw new ApiError(404, "User not found");
     }
 
-    // Check if already verified
     if (user.isVerified) {
       return res
         .status(200)
-        .json(new ApiResponse(200, "Email already verified"));
+        .json(new ApiResponse(200,{alreadyVerified:true}, "Email already verified"));
     }
 
-    // Check if code matches
-    //can remove string here
-    if (user.verificationCode.toString() !== verificationCode.toString()) {
-      throw new ApiError(404, "Invalid verification code");
-    }
-
-    // Mark user as verified and remove the code
     user.isVerified = true;
-    user.verificationCode = null;
+    user.verifyToken = null;
+    user.verifyTokenExpires = undefined;
+
     await user.save();
 
-    await sendThankYouEmail(email, user.firstName);
+    await sendThankYouEmail(user.email, user.firstName);
 
     res.status(200).json(new ApiResponse(200, "Email verified successfully"));
   } catch (error) {
-    console.error("Error during email verification:", error.message);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Verification error:", error);
+    res.status(400).json({ message: "Invalid or expired token" });
   }
-};
+});
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
   const incomingRefreshToken =

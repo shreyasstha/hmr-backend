@@ -6,7 +6,7 @@ const router = Router();
 router.route("/register").post(register);
 router.route("/login").post(login);
 router.route("/refreshToken").post(refreshAccessToken)
-router.route("/verifyEmail").post(verifyEmail)
+router.route("/verifyEmail").get(verifyEmail)
 router.route("/logout").post(logout)
 
 export default router;

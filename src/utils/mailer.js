@@ -20,14 +20,15 @@ const sendVerificationEmail = async (to, code) => {
   const mailOptions = {
     from: `"HMR" <${EMAIL_USER}>`,
     to: to,
-    subject: "Verify Your Email - HMR",
+    subject: "Verify Your Email ",
     // text: `Your verification code is: ${code}`,
      html: `
       <h2>Welcome to HMR!</h2>
       <p>Your verification code is:</p>
-      <h1 style="color:#4CAF50;">${code}</h1>
-      <p>This code will expire in 10 minutes.</p>
-    `,
+       <p>Click the link below to verify your email:</p>
+        <a href="${code}" style="color:#5F41E4;font-weight:bold;">Verify Email</a>
+        <p>This link will expire in 24 hours.</p>
+      `,
   };
 
   try {
