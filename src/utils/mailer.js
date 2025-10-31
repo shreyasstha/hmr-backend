@@ -15,16 +15,14 @@ const transporter = nodemailer.createTransport({
 
 // Verification Email
 const sendVerificationEmail = async (to, code) => {
-  console.log("Sending verification email to:", to, "with code:", code); // Added for debugging
 
   const mailOptions = {
     from: `"HMR" <${EMAIL_USER}>`,
     to: to,
     subject: "Verify Your Email ",
     // text: `Your verification code is: ${code}`,
-     html: `
+    html: `
       <h2>Welcome to HMR!</h2>
-      <p>Your verification code is:</p>
        <p>Click the link below to verify your email:</p>
         <a href="${code}" style="color:#5F41E4;font-weight:bold;">Verify Email</a>
         <p>This link will expire in 24 hours.</p>
@@ -58,4 +56,28 @@ const sendThankYouEmail = async (to, firstName) => {
   }
 };
 
-export { sendThankYouEmail, sendVerificationEmail };
+const sendLoginOTPEmail = async (to, otp) => {
+  // console.log("Sending verification email to:", to, "with otp:", otp); // Added for debugging
+  const mailOptions = {
+    from: `"HMR" <${EMAIL_USER}>`,
+    to: to,
+    subject: "Login OTP code",
+    // text: `Your verification code is: ${code}`,
+    html: `
+      <h2>Welcome to HMR!</h2>
+       <p>Your OTP for login is:</p>
+      <h3 style="color:#5F41E4;">${otp}</h3>
+        <p>This otp will expire in 5 minutes.</p>
+      `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+
+  } catch (error) {
+    console.error("Failed to send verification email:", error.message);
+    return false;
+  }
+};
+
+export { sendThankYouEmail, sendVerificationEmail, sendLoginOTPEmail };

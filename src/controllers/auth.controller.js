@@ -4,7 +4,11 @@ import { ApiError } from "../utils/apiError.js";
 import ApiResponse from "../utils/apiResponse.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { sendThankYouEmail, sendVerificationEmail } from "../utils/mailer.js";
+import {
+  sendLoginOTPEmail,
+  sendThankYouEmail,
+  sendVerificationEmail,
+} from "../utils/mailer.js";
 
 // Generate tokens
 export const generateAccessAndRefreshTokens = async (userId) => {
@@ -23,11 +27,6 @@ export const generateAccessAndRefreshTokens = async (userId) => {
   } catch (error) {
     throw new ApiError(500, "Something went wrong");
   }
-};
-
-// Generate a 6-digit verification code
-const generateVerificationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
 // registration
@@ -79,9 +78,6 @@ const register = asyncHandler(async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Generate verification code
-    const verificationCode = generateVerificationCode(); // Added server-side generation
-
     const newUser = new User({
       title,
       firstName,
@@ -91,7 +87,7 @@ const register = asyncHandler(async (req, res) => {
       password: hashedPassword,
       regNo,
       role,
-      verificationCode,
+      verifyToken: false,
       isVerified: false,
     });
 
@@ -117,11 +113,13 @@ const register = asyncHandler(async (req, res) => {
   }
 });
 
-// login
+const generateOTP = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
-const login = asyncHandler(async (req, res, next) => {
+// login
+const login = asyncHandler(async (req, res) => {
   try {
-    const { email, password, role } = req.body || {};
+    const { email, password } = req.body || {};
 
     // Validate input
     if ([email, password].some((field) => !field || field.trim() === "")) {
@@ -146,6 +144,86 @@ const login = asyncHandler(async (req, res, next) => {
           "Email not verified. Please check your email for verification code."
         );
     }
+
+    // Generate login OTP
+    const otp = generateOTP();
+    user.loginOTP = otp;
+    user.otpExpires = Date.now() + 5 * 60 * 1000; // 5 minutes
+    await user.save();
+
+    // Send OTP via email
+    await sendLoginOTPEmail(email, otp);
+    console.log(`Login OTP sent to ${email}: ${otp}`);
+
+    res.status(200).json(new ApiResponse(200, user, "OTP sent to your email"));
+  } catch (error) {
+    console.error("Error during login:", error.message);
+  }
+});
+
+//email verification
+const verifyEmail = asyncHandler(async (req, res) => {
+  try {
+    const token = req.query.token;
+    if (!token) {
+      throw new ApiError(400, "Missing verification token");
+    }
+
+    const decoded = jwt.verify(token, process.env.VERIFY_TOKEN_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    if (user.isVerified) {
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            { alreadyVerified: true },
+            "Email already verified"
+          )
+        );
+    }
+
+    user.isVerified = true;
+    user.verifyToken = null;
+    user.verifyTokenExpires = undefined;
+
+    await user.save();
+
+    await sendThankYouEmail(user.email, user.firstName);
+
+    res.status(200).json(new ApiResponse(200, "Email verified successfully"));
+  } catch (error) {
+    console.error("Verification error:", error);
+    res.status(400).json({ message: "Invalid or expired token" });
+  }
+});
+
+const verifyLoginOTP = asyncHandler(async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) throw new ApiError(400, "Email and OTP are required");
+
+    const user = await User.findOne({ email });
+    if (!user) throw new ApiError(404, "User not found");
+
+    if (!user.loginOTP || user.otpExpires < Date.now()) {
+      throw new ApiError(400, "OTP expired. Please request a new one.");
+    }
+
+    if (user.loginOTP !== otp) {
+      throw new ApiError(400, "Invalid OTP");
+    }
+
+    // Clear OTP fields
+    user.loginOTP = null;
+    user.otpExpires = undefined;
+    await user.save();
 
     // Generate access and refresh tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
@@ -175,43 +253,6 @@ const login = asyncHandler(async (req, res, next) => {
       .json(new ApiResponse(200, loggedInUser, "User logged in successfully"));
   } catch (error) {
     console.error("Error during login:", error.message);
-    next(error);
-  }
-});
-
-//email verification
-const verifyEmail = asyncHandler(async (req, res) => {
-  try {
-    const token = req.query.token;
-    if (!token) {
-      throw new ApiError(400, "Missing verification token");
-    }
-
-    const decoded = jwt.verify(token, process.env.VERIFY_TOKEN_SECRET);
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      throw new ApiError(404, "User not found");
-    }
-
-    if (user.isVerified) {
-      return res
-        .status(200)
-        .json(new ApiResponse(200,{alreadyVerified:true}, "Email already verified"));
-    }
-
-    user.isVerified = true;
-    user.verifyToken = null;
-    user.verifyTokenExpires = undefined;
-
-    await user.save();
-
-    await sendThankYouEmail(user.email, user.firstName);
-
-    res.status(200).json(new ApiResponse(200, "Email verified successfully"));
-  } catch (error) {
-    console.error("Verification error:", error);
-    res.status(400).json({ message: "Invalid or expired token" });
   }
 });
 
@@ -306,4 +347,11 @@ const logout = asyncHandler(async (req, res) => {
   }
 });
 
-export { register, login, refreshAccessToken, verifyEmail, logout };
+export {
+  register,
+  login,
+  refreshAccessToken,
+  verifyEmail,
+  verifyLoginOTP,
+  logout,
+};
